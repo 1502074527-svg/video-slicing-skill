@@ -3,11 +3,14 @@
 
 只改文本、不动时间戳。每次替换写进报告，出问题可逐条回滚。
 
-用法: python3 proofread.py <输入.srt> <输出.srt> <替换表.txt> <报告.md>
+用法: python3 proofread.py <输入.srt> <输出.srt> <替换表.txt> <报告.md> [--force]
 替换表格式: 误写=>正写（每行一条，# 开头为注释）。
+输出文件已存在时默认拒绝覆盖，确认要覆盖加 --force。
 """
 import sys
 from pathlib import Path
+
+from safe_out import guard_output
 
 
 def main():
@@ -15,6 +18,8 @@ def main():
         print(__doc__)
         sys.exit(1)
     inp, outp, table, report = map(Path, sys.argv[1:5])
+    guard_output(outp, inp)
+    guard_output(report, inp)
 
     rules = []
     for ln in table.read_text(encoding='utf-8').splitlines():

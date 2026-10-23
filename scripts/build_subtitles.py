@@ -2,32 +2,35 @@
 """用【字级时间戳】生成精确字幕：支持 3 种电影级断句模式，不腰斩语义。
 
 模式：
-  sentence  整句：只在 。？！ 后断，节奏舒缓，适合 B 站/学术讲座
+  sentence  整句：**只在 。？！ 后断**（不按字数强断，只在真实静音处另起），节奏舒缓，适合 B 站/学术讲座
   clause    半句：在 ，、；：。？！ 后都断，节奏明快，适合视频号/小红书
   fragment  碎句：所有标点后都断 + 长句强断，节奏紧凑，适合抖音/Shorts
 
 原理：
  1. 字级 SRT（每字独立起止时间）与校对后文本做字符级对齐，得到每字真实起止时间。
  2. 按选定模式的标点集合把文本切成块，每块取真实起止时间作为一条字幕。
- 3. 跨静音（>=1.2s）强制断条；过短碎块回并邻块；过长块在就近标点强断。
+ 3. 跨静音（>=1.2s）强制断条；过短碎块回并邻块；clause/fragment 另有过长强断。
  4. 所有时间戳吸附到帧边界（默认 30fps）。
 
 用法:
   python3 build_subtitles.py <字级.srt> <校对稿.srt> <输出.srt> \\
-      [--mode sentence|clause|fragment] [--max-chars 30] [--max-secs 6.5] [--fps 30]
+      [--mode sentence|clause|fragment] [--max-chars 30] [--max-secs 6.5] [--fps 30] [--force]
 """
 import re
 import sys
 from difflib import SequenceMatcher
 from pathlib import Path
 
+from safe_out import guard_output
+
 STRONG_PUNCT = '。！？!?'
 WEAK_PUNCT = '，、；：,;:'
 ALL_PUNCT = STRONG_PUNCT + WEAK_PUNCT
+SENT_TAIL = re.compile(r'[。！？!?…]+$')
 
-# 模式 -> (断句标点集合, 强断阈值字数, 推荐最大时长)
+# 模式 -> (断句标点集合, 强断阈值字数（None = 不按字数强断）, 推荐最大时长)
 MODES = {
-    'sentence': (STRONG_PUNCT, 15, 6.5),
+    'sentence': (STRONG_PUNCT, None, 6.5),
     'clause':   (ALL_PUNCT,    20, 5.0),
     'fragment': (ALL_PUNCT,    10, 3.5),
 }
@@ -99,11 +102,12 @@ def cut_into_cues(chars, puncts, strong_max_chars, max_chars, max_secs,
     if cur:
         blocks.append(cur)
 
-    # 2) 过长块在就近标点/最长停顿处强断
+    # 2) 过长块在就近标点/最长停顿处强断（sentence 模式不做这一步，严守「只在句末断」）
     refined = []
     for blk in blocks:
-        while (len(''.join(c[0] for c in blk)) > strong_max_chars
-               or blk[-1][2] - blk[0][1] > max_secs) and len(blk) > 1:
+        while (strong_max_chars is not None and len(blk) > 1
+               and (len(''.join(c[0] for c in blk)) > strong_max_chars
+                    or blk[-1][2] - blk[0][1] > max_secs)):
             cut = _preferred_cut(blk, strong_max_chars)
             cut = max(1, min(cut, len(blk) - 1))
             refined.append(blk[:cut])
@@ -111,14 +115,16 @@ def cut_into_cues(chars, puncts, strong_max_chars, max_chars, max_secs,
         if blk:
             refined.append(blk)
 
-    # 3) 过短碎块回并邻块（不跨静音）
+    # 3) 过短碎块回并邻块（不跨静音，也不跨句末标点——否则整句模式会被并回长条）
     out = []
     for blk in refined:
         t = ''.join(c[0] for c in blk)
         dur = blk[-1][2] - blk[0][1]
         gap = blk[0][1] - out[-1][-1][2] if out else 0.0
-        if out and (len(t) < min_chars or dur < min_secs) and gap < silence_gap:
-            merged_t = ''.join(c[0] for c in out[-1]) + t
+        prev_t = ''.join(c[0] for c in out[-1]) if out else ''
+        if (out and (len(t) < min_chars or dur < min_secs) and gap < silence_gap
+                and not SENT_TAIL.search(prev_t)):
+            merged_t = prev_t + t
             merged_d = blk[-1][2] - out[-1][0][1]
             if len(merged_t) <= max_chars and merged_d <= max_secs:
                 out[-1] = out[-1] + blk
@@ -153,6 +159,7 @@ def main():
         print(__doc__)
         sys.exit(1)
     wl, pf, out = sys.argv[1], sys.argv[2], sys.argv[3]
+    guard_output(out, wl)
     args = sys.argv[4:]
     get = lambda k, d=None: (args[args.index(k) + 1] if k in args else d)
     mode = get('--mode', 'clause')
@@ -202,6 +209,12 @@ def main():
         med = sorted(durs)[len(durs) // 2]
         if med < 0.8 and mode != 'fragment':
             print(f"⚠️  字幕时长中位仅 {med:.1f}s —— 请确认第一份 srt 是字级稿，不是句级稿。")
+        if mode == 'sentence':
+            overs = [c for c in cues if len(c['text']) > max_chars]
+            if overs:
+                print(f"⚠️  {len(overs)} 条字幕超过 {max_chars} 字（最长 "
+                      f"{max(len(c['text']) for c in cues)} 字）。sentence 模式只在句末断句；"
+                      f"若源稿缺标点，请先补标点，或改用 --mode clause。")
         print(f"输出 {out}: {len(cues)} 条；模式={mode}；"
               f"时长 中位={med:.1f}s；字数 中位={sorted(lens)[len(lens)//2]}")
 

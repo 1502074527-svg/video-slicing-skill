@@ -31,6 +31,8 @@ import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
+from safe_out import guard_output
+
 DEFAULT_PROMPT = """你是长视频听打稿的校对员。讲者口音不一，术语密集，转写稿用简体。
 
 请逐句校对，只处理下面两类问题：
@@ -45,6 +47,14 @@ DEFAULT_PROMPT = """你是长视频听打稿的校对员。讲者口音不一，
 - 输出必须是 JSON 数组，每项：{"i": 序号, "text": 校对后整句, "changed": true/false,
   "reason": "依据（一句话）", "confidence": 0.0~1.0}
 """
+
+
+def safe_float(s, default=0.0):
+    """容错解析：TSV 被手改成「高」「0.9左右」时不崩。"""
+    try:
+        return float(str(s).strip())
+    except ValueError:
+        return default
 
 
 def to_sec(ts):
@@ -95,6 +105,7 @@ def extract_json(txt):
 
 def cmd_review(a):
     src, out = a[0], a[1]
+    guard_output(out, src)
     args = a[2:]
     get = lambda k, d=None: (args[args.index(k) + 1] if k in args else d)
     base = get('--api-base') or os.environ.get('PROOFREAD_BASE_URL') or os.environ.get('OPENAI_BASE_URL')
@@ -155,7 +166,7 @@ def cmd_review(a):
                 n_changed += 1
             clean = lambda v: re.sub(r'[\t\r\n]+', ' ', str(v or '')).strip()
             rows.append((c['start'], clean(c['text']), clean(new), changed,
-                         float(x.get('confidence') or 0.0), clean(x.get('reason')), hit))
+                         safe_float(x.get('confidence')), clean(x.get('reason')), hit))
 
     with open(out, 'w', encoding='utf-8') as f:
         f.write("起秒\t原句\t建议句\t改动\t置信度\t依据\t命中术语表\n")
@@ -168,6 +179,7 @@ def cmd_review(a):
 def cmd_apply(a):
     src, tsv, dst = a[0], a[1], a[2]
     args = a[3:]
+    guard_output(dst, src)
     min_conf = float(args[args.index('--min-conf') + 1]) if '--min-conf' in args else 0.9
     only_terms = '--only-terms' in args
     fixes = {}
@@ -177,19 +189,34 @@ def cmd_apply(a):
             p = ln.rstrip('\n').split('\t')
             if len(p) < 7:
                 continue
-            st, old, new, ch, conf, hit = p[0], p[1], p[2], p[3], float(p[4]), p[6]
+            st, old, new, ch, conf, hit = p[0], p[1], p[2], p[3], safe_float(p[4]), p[6]
             if ch != '是' or conf < min_conf:
                 continue
             if only_terms and hit != '是':
                 continue
-            fixes[round(float(st), 1)] = new
+            fixes[round(safe_float(st, -1), 1)] = (old.strip(), new)
     cues = parse_srt(src)
-    n = 0
+    n, mism = 0, []
     for c in cues:
         k = round(c['start'], 1)
-        if k in fixes and fixes[k] != c['text']:
-            c['text'] = fixes[k]
-            n += 1
+        if k not in fixes:
+            continue
+        old, new = fixes[k]
+        if c['text'] == new:
+            continue
+        # 双键校验：起秒对上还不够，原句也必须逐字相同。
+        # TSV 被手改、或源稿在中途被替换过，都会在这里被挡住，而不是改错句。
+        if c['text'] != old:
+            mism.append((k, old, c['text']))
+            continue
+        c['text'] = new
+        n += 1
+    if mism:
+        print(f"✗ 有 {len(mism)} 条 TSV 记录与源稿对不上，已中止，未写任何文件。")
+        for k, exp, got in mism[:3]:
+            print(f"  起秒 {k}: TSV 原句={exp[:30]!r}  源稿={got[:30]!r}")
+        print("  原因通常是 TSV 被手改过，或源稿在 review 之后又变过。请重新跑 review。")
+        sys.exit(3)
     Path(dst).write_text('\n'.join(
         f"{i}\n{fmt(c['start'])} --> {fmt(c['end'])}\n{c['text']}\n"
         for i, c in enumerate(cues, 1)), encoding='utf-8')

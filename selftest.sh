@@ -51,6 +51,36 @@ python3 "$ROOT/scripts/consolidate_lexicon.py" "$SAMPLE/校对建议-样例.tsv"
 if grep -q '结囊 => 截然' "$TMP/词表.txt"; then ok "--write 正确回写 2 字术语对"; else bad "--write 未回写"; fi
 if ! grep -q '变 => 辨' "$TMP/词表.txt"; then ok "危险单字对已被拦截"; else bad "单字对污染词表"; fi
 
+echo "== 7. sentence 模式长句不腰斩 =="
+python3 "$ROOT/scripts/build_subtitles.py" "$SAMPLE/字级-长句.srt" "$SAMPLE/句级-长句.srt" \
+  "$TMP/长句-sentence.srt" --mode sentence >/dev/null
+if [ "$(count "$TMP/长句-sentence.srt")" -eq 1 ]; then ok "30 字长句仍为 1 条（未在逗号处断）"; else bad "长句被强断成 $(count "$TMP/长句-sentence.srt") 条"; fi
+python3 "$ROOT/scripts/build_subtitles.py" "$SAMPLE/字级-长句.srt" "$SAMPLE/句级-长句.srt" \
+  "$TMP/长句-clause.srt" --mode clause >/dev/null
+if [ "$(count "$TMP/长句-clause.srt")" -gt 1 ]; then ok "clause 模式同文本正常切成 $(count "$TMP/长句-clause.srt") 条"; else bad "clause 模式未按逗号断句"; fi
+
+echo "== 8. 输出覆盖保护 =="
+if python3 "$ROOT/scripts/merge_srt.py" "$SAMPLE/字级-样例.srt" "$TMP/句级.srt" >/dev/null 2>&1; then
+  bad "已存在的输出竟被静默覆盖"
+else ok "输出已存在时拒绝覆盖"; fi
+if python3 "$ROOT/scripts/merge_srt.py" "$SAMPLE/字级-样例.srt" "$TMP/句级.srt" --force >/dev/null 2>&1; then
+  ok "--force 可显式覆盖"
+else bad "--force 未能覆盖"; fi
+cp "$SAMPLE/字级-样例.srt" "$TMP/同路径.srt"
+if python3 "$ROOT/scripts/merge_srt.py" "$TMP/同路径.srt" "$TMP/同路径.srt" --force >/dev/null 2>&1; then
+  bad "输入输出同路径未被拦截"
+else ok "输入=输出 被拦截"; fi
+
+echo "== 9. apply 双键校验 =="
+python3 "$ROOT/scripts/proofread_llm.py" apply "$TMP/句级-术语.srt" \
+  "$SAMPLE/校对建议-可合入.tsv" "$TMP/句级-校对.srt" >/dev/null
+if grep -q '此为学问大关节' "$TMP/句级-校对.srt"; then ok "原句逐字匹配时正常合入"; else bad "合入失败"; fi
+if python3 "$ROOT/scripts/proofread_llm.py" apply "$TMP/句级-术语.srt" \
+     "$SAMPLE/校对建议-对不上.tsv" "$TMP/不该存在.srt" >/dev/null 2>&1; then
+  bad "原句不符竟然也合入"
+else ok "原句不符时中止"; fi
+if [ ! -f "$TMP/不该存在.srt" ]; then ok "中止时未落盘"; else bad "中止时仍写了文件"; fi
+
 echo
 echo "结果：$pass 通过 / $fail 失败"
 [ "$fail" -eq 0 ] || exit 1

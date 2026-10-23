@@ -4,11 +4,14 @@
 字级 SRT 是时间轴金标准，但一句一条几百条没法校对。
 本脚本只做「视图合并」：按标点或静音断句，不动任何字的时间戳。
 
-用法: python3 merge_srt.py <字级.srt> <句级.srt> [--gap 1.2]
+用法: python3 merge_srt.py <字级.srt> <句级.srt> [--gap 1.2] [--force]
+（输出文件已存在时默认拒绝覆盖，确认要覆盖加 --force）
 """
 import re
 import sys
 from pathlib import Path
+
+from safe_out import guard_output
 
 SENT_END = re.compile(r'[。！？；…!?;]+$')
 
@@ -43,6 +46,7 @@ def main():
         print(__doc__)
         sys.exit(1)
     src, dst = sys.argv[1], sys.argv[2]
+    guard_output(dst, src)
     gap = float(sys.argv[sys.argv.index('--gap') + 1]) if '--gap' in sys.argv else 1.2
 
     words = parse_srt(src)

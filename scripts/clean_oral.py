@@ -7,7 +7,8 @@
     防止把《四书》原文当口水词误删。
  3. 本脚本**不做**"删讲错重讲"的语义判断 —— 那需要听音频，交给人工。
 
-用法: python3 clean_oral.py <输入.srt> <输出.srt> [--filler "嗯呃啊哦噢诶哎唉"]
+用法: python3 clean_oral.py <输入.srt> <输出.srt> [--filler "嗯呃啊哦噢诶哎唉"] [--force]
+输出文件已存在时默认拒绝覆盖，确认要覆盖加 --force。
 
 注意：哈/嘿/吼 默认**不删**——它们多是笑声而非口水词，盲删会把「哈佛」「哈耶克」
 「吼叫」削掉一半。确需清理请显式传 --filler 覆盖默认表。
@@ -15,6 +16,8 @@
 import re
 import sys
 from pathlib import Path
+
+from safe_out import guard_output
 
 # 只收真正的口水音。绝不把「这个/就是/好」放进列表——它们是正常用词，
 # 曾因误删导致「很好」变「很」、语义被改。
@@ -44,6 +47,7 @@ def main():
         print(__doc__)
         sys.exit(1)
     inp, outp = Path(sys.argv[1]), Path(sys.argv[2])
+    guard_output(outp, inp)
     filler = get_arg('--filler', DEFAULT_FILLER)
 
     raw = inp.read_text(encoding='utf-8')
