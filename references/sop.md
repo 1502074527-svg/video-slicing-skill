@@ -113,7 +113,17 @@ ffmpeg -ss 00:10:23 -to 00:12:45 -i 源视频.mp4 \
 **怎么选**：交付级切片用精切；只是自己快速预览用 `-c copy`。
 若源视频关键帧密集（GOP ≤ 1s），`-c copy` 的偏差通常可接受，可先用 `ffprobe` 看 `keyint`。
 
-> v0.1 只给这条命令，批量切片与切点自动校验在 v0.3（见 README Roadmap）。
+> 交付级一律用重编码；`-c copy` 只用于自己快速预览。上面的手写命令用于排查，
+> 正常批量走下面的工具链（切点均落在字幕间隙，不再手工算时间）。
+
+```bash
+python3 scripts/propose_cuts.py 精确字幕.srt 切点表.md --min-secs 30 --max-secs 300
+# ★ 必停：人工复核每一行的起止（可用 health_map.py 看覆盖与长静音）
+python3 scripts/health_map.py 精确字幕.srt 字幕健康图.svg
+python3 scripts/make_table.py 切点表.md 精确字幕.srt 切点表-全文.md   # 每段配全文，便于复核
+python3 scripts/generate_slices.py 切点表.md 源视频.mp4 精确字幕.srt 切片目录
+python3 scripts/verify_slices.py 切点表.md 精确字幕.srt 切片目录        # 有异常不得交付
+```
 
 ---
 

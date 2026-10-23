@@ -121,7 +121,16 @@ python3 ../../scripts/build_subtitles.py 字级.srt 句级-校对.srt 精确字�
 - 时长中位 2.6 秒
 - 字数中位 11 字
 
-人工定切点（或让 Agent 提议后人审），写入 `切点表.md`：
+自动提议切点（切点只落在字幕间隙，30 秒–5 分钟），**人工复核**后再切片：
+
+```bash
+python3 ../../scripts/propose_cuts.py 精确字幕.srt 切点表.md --min-secs 30 --max-secs 300
+# ★ 必停：逐行复核起止是否语义完整（可先看字幕健康图，避开低覆盖区）
+python3 ../../scripts/health_map.py 精确字幕.srt 字幕健康图.svg
+python3 ../../scripts/make_table.py 切点表.md 精确字幕.srt 切点表-全文.md   # 每段配全文
+```
+
+复核后的切点表（`generate_slices.py` 按此表切片，字幕自动时间归零）：
 
 ```
 | # | 起 | 止 | 内容 |
@@ -131,18 +140,16 @@ python3 ../../scripts/build_subtitles.py 字级.srt 句级-校对.srt 精确字�
 | 3 | 00:34:18 | 00:37:42 | 慎独工夫的入手处 |
 ```
 
-用 ffmpeg 切片：
-
 ```bash
-ffmpeg -ss 00:03:12 -to 00:05:48 -i 孟子答疑课-20260315.mp4 \
-  -c:v libx264 -crf 18 -preset medium -c:a aac -b:a 192k 切片01-人禽之辨.mp4
-ffmpeg -ss 00:12:30 -to 00:14:55 -i 孟子答疑课-20260315.mp4 \
-  -c:v libx264 -crf 18 -preset medium -c:a aac -b:a 192k 切片02-四端.mp4
-ffmpeg -ss 00:34:18 -to 00:37:42 -i 孟子答疑课-20260315.mp4 \
-  -c:v libx264 -crf 18 -preset medium -c:a aac -b:a 192k 切片03-慎独.mp4
+# 批量切片（重编码，切点精确到帧）+ 每段字幕
+python3 ../../scripts/generate_slices.py 切点表.md 孟子答疑课-20260315.mp4 精确字幕.srt 切片/
+# 核验：时长、切点是否落在字幕间隙、片内字幕首末覆盖
+python3 ../../scripts/verify_slices.py 切点表.md 精确字幕.srt 切片/
+# 需要剪映草稿时（已装 capcut-cli）
+python3 ../../scripts/generate_drafts.py 切点表.md 孟子答疑课-20260315.mp4 精确字幕.srt 切片/
 ```
 
-用 `精确字幕.srt` 按切片起止裁出每段对应的字幕条，烧进视频或作为外挂字幕交付。
+产出结构：`切片/01-人禽之辨/01-人禽之辨.mp4` + 同名 `.srt`；加 `--burn` 额外生成烧字幕版本。
 
 ## 踩过的坑（都在 pitfalls.md 有详细解释）
 
@@ -184,5 +191,5 @@ ffmpeg -ss 00:34:18 -to 00:37:42 -i 孟子答疑课-20260315.mp4 \
 | `校对建议-可合入.tsv` / `校对建议-对不上.tsv` | 验证 apply 的双键校验（后者故意改坏原句） |
 
 ```bash
-cd ../.. && ./selftest.sh    # 21 项断言，全过说明链路可用
+cd ../.. && ./selftest.sh    # 30 项断言，全过说明链路可用
 ```

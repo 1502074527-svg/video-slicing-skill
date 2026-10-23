@@ -71,15 +71,14 @@
 |---|---|
 | 输入 | 视频 + 已完成的精确字幕 |
 | 前置依赖 | **S2 必须已完成** |
-| 出稿链 | 生成切点表 → 人工确认 → ffmpeg 切片 |
+| 出稿链 | propose_cuts 提议 → 人工确认 → make_table 配全文 → generate_slices 切片 → verify_slices 核验 |
 | 交付 | 切片 mp4 + 每条切片对应字幕 + 切点表 |
 | 必停点 | ① 切点表人工确认（30 秒–5 分钟、语义完整、切点卡在相邻字幕条间隙） |
 | 禁止 | 截断完整语句、切点落在字中间、无字幕依据凭感觉切 |
 
-> ⚠️ **v0.1 工具现状**：S3 只有本节的规则与 SOP，**没有配套脚本**。
-> 切点提议（`propose_cuts.py`）、批量切片（`generate_drafts.py`）、切点核验（`verify_slices.py`）在 v0.3。
-> 当前执行 S3 时：切点由人工确定，切片命令手写。
-> **禁止暗示 S3 与 S1/S2 同等成熟**——接到 S3 需求时必须先说明这一点。
+> 配套脚本：`propose_cuts.py`、`make_table.py`、`make_transcript.py`、`generate_slices.py`、
+> `verify_slices.py`、`health_map.py`（选段辅助）、`generate_drafts.py`（剪映草稿，需 capcut-cli）。
+> 切点提议只是**初筛**：必须人工复核后才能切片；`verify_slices.py` 不通过不得交付。
 
 ---
 

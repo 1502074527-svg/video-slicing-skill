@@ -25,13 +25,13 @@ description: 把 1.5–2 小时的课程/讲座/会议录播切成可直接发�
 - 不允许适配：时间轴来源、文本决定权、可追溯性、词表回写的人工确认
 - 超出 S1–S3 的需求：明确告知超范围，给替代建议，不硬做
 
-**三场景成熟度不一致，必须如实告知用户**：
+**三场景共用同一套时间轴与文本纪律；S3 额外依赖 ffmpeg 与已完成字幕**：
 
-| 场景 | v0.1 工具支撑 | 说明 |
+| 场景 | 工具支撑 | 主链路 |
 |---|---|---|
-| S1 口播 | ✅ 完整 | merge → proofread → clean_oral 全链路脚本 |
-| S2 字幕 | ✅ 完整 | build_subtitles 三模式 + 21 项自检 |
-| S3 高光剪辑 | ⚠️ 只有原则 | 切点提议/批量切片/核验在 v0.3，当前需人工定切点 + 手写 ffmpeg |
+| S1 口播 | ✅ 完整 | merge → proofread → clean_oral → 文字稿 |
+| S2 字幕 | ✅ 完整 | build_subtitles 三模式 + 帧吸附 |
+| S3 高光剪辑 | ✅ 完整 | propose_cuts → 人工确认 → generate_slices → verify_slices |
 
 ---
 
@@ -160,12 +160,18 @@ python3 scripts/consolidate_lexicon.py 校对建议.tsv 术语替换表.txt
 python3 scripts/build_subtitles.py 字级.srt 句级-校对.srt 精确字幕.srt \
   --mode clause --fps 30
 
-# 切点表（人工定或 AI 提议后人审）
-# → ffmpeg 按切点切片（交付级用重编码，-c copy 会吸附关键帧，见 sop.md#step-8-切片）
+# S3 高光剪辑（S2 完成后才可开工）
+python3 scripts/propose_cuts.py 精确字幕.srt 切点表.md --min-secs 30 --max-secs 300
+# → 必停：人工复核切点表（可先用 health_map.py 看全片覆盖与长静音）
+python3 scripts/make_table.py 切点表.md 精确字幕.srt 切点表-全文.md
+python3 scripts/generate_slices.py 切点表.md 源视频.mp4 精确字幕.srt 切片目录
+python3 scripts/verify_slices.py 切点表.md 精确字幕.srt 切片目录
+# 需要剪映草稿时（已装 capcut-cli）
+python3 scripts/generate_drafts.py 切点表.md 源视频.mp4 精确字幕.srt 切片目录
 ```
 
-> ⚠️ **S3 高光剪辑在 v0.1 只有原则、没有工具**：切点提议、批量切片、切点核验都在 v0.3。
-> 现在做 S3 需要你自己定切点、手写 ffmpeg 命令。**必须如实告知用户**，不要暗示 S3 与 S1/S2 同等成熟。
+> 切片一律重编码（`-c copy` 会吸附关键帧，切点与字幕对不上）。`propose_cuts` 只做初筛，
+> **没有人工复核切点表就切片 = 违规**。
 
 ---
 

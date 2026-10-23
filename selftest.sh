@@ -15,7 +15,9 @@ bad()  { echo "  ✗ $1"; fail=$((fail + 1)); }
 count() { grep -c -- ' --> ' "$1" 2>/dev/null || true; }
 
 echo "== 1. 脚本语法检查 =="
-if python3 -m py_compile "$ROOT"/scripts/*.py 2>/dev/null; then ok "7 个脚本语法通过"; else bad "语法检查失败"; fi
+if python3 -m py_compile "$ROOT"/scripts/*.py 2>/dev/null; then
+  ok "$(ls "$ROOT"/scripts/*.py | wc -l | tr -d ' ') 个 Python 脚本语法通过"
+else bad "语法检查失败"; fi
 
 echo "== 2. 字级 → 句级 =="
 python3 "$ROOT/scripts/merge_srt.py" "$SAMPLE/字级-样例.srt" "$TMP/句级.srt" >/dev/null
@@ -80,6 +82,57 @@ if python3 "$ROOT/scripts/proofread_llm.py" apply "$TMP/句级-术语.srt" \
   bad "原句不符竟然也合入"
 else ok "原句不符时中止"; fi
 if [ ! -f "$TMP/不该存在.srt" ]; then ok "中止时未落盘"; else bad "中止时仍写了文件"; fi
+
+echo "== 10. 切点提议 / 带稿切点表 / 文字稿 =="
+python3 "$ROOT/scripts/propose_cuts.py" "$SAMPLE/字级-样例.srt" "$TMP/切点表.md" \
+  --min-secs 5 --max-secs 12 >/dev/null
+if grep -q '| 1 |' "$TMP/切点表.md"; then ok "propose_cuts 产出切点表"; else bad "切点表为空"; fi
+if python3 - "$ROOT/scripts" "$TMP/切点表.md" "$SAMPLE/字级-样例.srt" <<'PY'
+import sys
+sys.path.insert(0, sys.argv[1])
+from srtlib import load_cut_table, parse_srt
+rows, cues = load_cut_table(sys.argv[2]), parse_srt(sys.argv[3])
+bad = [r for r in rows for c in cues
+       if c['start'] < r['start'] - 0.05 and c['end'] > r['start'] + 0.05]
+sys.exit(1 if bad else 0)
+PY
+then ok "所有切点均落在字幕间隙（未切开字幕条）"; else bad "切点切开了字幕条"; fi
+python3 "$ROOT/scripts/make_table.py" "$TMP/切点表.md" "$SAMPLE/字级-样例.srt" "$TMP/切点表-全文.md" >/dev/null
+if grep -q '^## 1\.' "$TMP/切点表-全文.md"; then ok "make_table 每段配全文"; else bad "带稿切点表缺全文块"; fi
+python3 "$ROOT/scripts/make_transcript.py" "$SAMPLE/字级-样例.srt" "$TMP/文字稿.md" >/dev/null
+if grep -qE '\[[0-9]{2}:[0-9]{2}:[0-9]{2}' "$TMP/文字稿.md"; then ok "make_transcript 产出带时间戳文字稿"; else bad "文字稿缺时间戳"; fi
+
+echo "== 11. 字幕健康图 =="
+python3 "$ROOT/scripts/health_map.py" "$SAMPLE/字级-样例.srt" "$TMP/健康图.svg" >/dev/null
+if grep -q '<svg' "$TMP/健康图.svg" && grep -q '静音' "$TMP/健康图.svg"; then
+  ok "health_map 产出 SVG（含静音图例）"
+else bad "健康图 SVG 异常"; fi
+if grep -q '低覆盖' "$TMP/健康图.svg"; then ok "健康图标注低覆盖窗口"; else bad "健康图缺低覆盖标注"; fi
+
+echo "== 12. 环境自检 =="
+if "$ROOT/scripts/check_env.sh" >/dev/null 2>&1; then ok "check_env.sh 通过"; else bad "check_env.sh 报必需项缺失"; fi
+
+echo "== 13. 文本链一键串跑 =="
+"$ROOT/scripts/run_text_pipeline.sh" "$SAMPLE/字级-样例.srt" "$TMP/pipeline" \
+  --lexicon "$SAMPLE/术语替换表-样例.txt" --mode clause >/dev/null
+if [ -f "$TMP/pipeline/04-字幕.srt" ] && grep -q -- ' --> ' "$TMP/pipeline/04-字幕.srt"; then
+  ok "run_text_pipeline 产出 04-字幕.srt"
+else bad "一键串跑未产出最终字幕"; fi
+
+echo "== 14. 切片闭环（装好 ffmpeg 才跑）=="
+if command -v ffmpeg >/dev/null 2>&1; then
+  ffmpeg -y -loglevel error -f lavfi -i "testsrc=duration=12:size=160x120:rate=10" \
+    -f lavfi -i "sine=frequency=440:duration=12" -c:v libx264 -preset veryfast -crf 30 \
+    -c:a aac -shortest "$TMP/src.mp4"
+  python3 "$ROOT/scripts/generate_slices.py" "$TMP/切点表.md" "$TMP/src.mp4" \
+    "$SAMPLE/字级-样例.srt" "$TMP/slices" --crf 30 >/dev/null
+  if python3 "$ROOT/scripts/verify_slices.py" "$TMP/切点表.md" "$SAMPLE/字级-样例.srt" \
+       "$TMP/slices" >/dev/null 2>&1; then
+    ok "generate_slices + verify_slices 闭环通过"
+  else bad "切片核验失败"; fi
+else
+  echo "  · 跳过（未装 ffmpeg）：仅影响 S3 切片，文本链不受影响"
+fi
 
 echo
 echo "结果：$pass 通过 / $fail 失败"

@@ -16,7 +16,7 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: 运行自检（含 21 项断言）
+      - name: 运行自检（含 30 项断言）
         run: ./selftest.sh
 
       - name: 检查文档内部链接（markdown 相对路径）
