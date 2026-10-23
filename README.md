@@ -84,6 +84,7 @@ cd video-slicing-skill
 | 你想做什么 | 去哪看 |
 |---|---|
 | Agent 加载入口 | [SKILL.md](SKILL.md) |
+| 场景边界与适配规范 | [references/scope-and-adaptation.md](references/scope-and-adaptation.md) |
 | 端到端操作手册 | [references/sop.md](references/sop.md) |
 | 选 ASR 方案 | [references/asr-engines.md](references/asr-engines.md) |
 | 选字幕断句模式 | [references/subtitle-segmentation.md](references/subtitle-segmentation.md) |
