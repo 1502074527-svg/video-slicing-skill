@@ -56,13 +56,16 @@ python3 scripts/proofread.py 句级.srt 句级-术语.srt 术语替换表.txt �
 python3 scripts/clean_oral.py 句级-术语.srt 句级-清理.srt
 ```
 
-去「啊、呃、这个、就是」等口水词，删 ≤4 字的讲错重讲片段。
+只删「嗯、呃、啊、哦、噢、诶、哎、唉」这类纯口水音，**不删**「这个、就是、好」等正常用词，
+也**不删**「哈」（否则「哈佛」会被削成「佛」）。默认表之外的字符需用 `--filler` 显式指定。
+删完会顺手收掉因删字产生的粘连标点（「，，」→「，」），时间戳一律不动，「肫肫」「夭夭」等经典叠字有守卫不会误删。
+本脚本**不做**「删讲错重讲」的语义判断——那需要听音频，交给人工。
 **必须在字级对齐之前跑**——只改文本不动时间戳。
 
 ### Step 5 — LLM 校对（人工审）
 
 ```bash
-# 5.1 LLM 出建议（必停选 Prompt，见 elicitation.md#4）
+# 5.1 LLM 出建议（必停选 Prompt，见 elicitation.md#4-llm-校对双停）
 python3 scripts/proofread_llm.py review 句级-清理.srt 校对建议.tsv \
   --prompt-file references/prompts/proofreader-confucian.md \
   --terms 术语替换表.txt \
@@ -77,11 +80,11 @@ python3 scripts/proofread_llm.py apply 句级-清理.srt 校对建议.tsv 句级
 ### Step 6 — 沉淀回写
 
 ```bash
-# 先看建议（dry-run）
-python3 scripts/consolidate_lexicon.py 校对建议.tsv 术语替换表.txt --dry-run
-
-# 用户确认后真写
+# 先看建议（默认只读，不写文件）
 python3 scripts/consolidate_lexicon.py 校对建议.tsv 术语替换表.txt
+
+# 用户逐条确认后真写
+python3 scripts/consolidate_lexicon.py 校对建议.tsv 术语替换表.txt --write
 ```
 
 ### Step 7 — 生成精确字幕

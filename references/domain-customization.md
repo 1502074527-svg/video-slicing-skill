@@ -103,11 +103,11 @@ JSON 数组，每项 {i, text, changed, reason, confidence}
 `scripts/consolidate_lexicon.py` 是闭环的关键：
 
 ```bash
-# 看完校对建议后， dry-run 看建议新增哪些
-python3 scripts/consolidate_lexicon.py 校对建议.tsv 术语替换表.txt --dry-run
-
-# 用户确认后真写进词表
+# 默认只读：列出建议新增哪些，不写文件
 python3 scripts/consolidate_lexicon.py 校对建议.tsv 术语替换表.txt
+
+# 用户逐条确认后，显式加 --write 才真写进词表
+python3 scripts/consolidate_lexicon.py 校对建议.tsv 术语替换表.txt --write
 ```
 
 **过滤规则**（自动）：
@@ -115,7 +115,7 @@ python3 scripts/consolidate_lexicon.py 校对建议.tsv 术语替换表.txt
 - 跨度 >2 字的（整句重写）不回写
 - 已在词表里的不重复
 
-**人工把关**：默认 `--dry-run`，必须用户确认后才真写——这是最后的防线。
+**人工把关**：默认只读，不加 `--write` 永不落盘——这是最后的防线。
 
 ## 跨领域复用检查清单
 

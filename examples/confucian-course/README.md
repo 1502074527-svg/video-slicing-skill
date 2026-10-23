@@ -82,9 +82,9 @@ python3 ../../scripts/proofread_llm.py apply 句级-清理.srt 校对建议.tsv 
 ### ⑥ 沉淀回写
 
 ```bash
-# 先看清单
+# 默认只读，只看清单，不改词表
 python3 ../../scripts/consolidate_lexicon.py 校对建议.tsv \
-  ../../references/lexicons/confucian.txt --dry-run
+  ../../references/lexicons/confucian.txt
 ```
 
 输出示例：
@@ -97,9 +97,9 @@ python3 ../../scripts/consolidate_lexicon.py 校对建议.tsv \
 人工确认「慎渎 → 慎独」要写进词表（高频且确定），「浩浩 → 皓皓」不写（可能只是泛指，不该一刀切）。手动删掉第 2 行后真写：
 
 ```bash
-# 手动编辑 校对建议.tsv 把第 2 条删掉，再：
+# 手动编辑 校对建议.tsv 把第 2 条删掉，再显式加 --write 真写：
 python3 ../../scripts/consolidate_lexicon.py 校对建议.tsv \
-  ../../references/lexicons/confucian.txt
+  ../../references/lexicons/confucian.txt --write
 ```
 
 下次转写同领域内容时「慎渎」会被自动替换成「慎独」——这就是**越用越准**。

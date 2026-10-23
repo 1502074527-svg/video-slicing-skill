@@ -14,40 +14,64 @@
 2. **术语不能错**——"人禽之辨" 识别成 "人禽之变"，学术内容立刻变笑话。
 3. **校对权必须在人手里**——LLM 直接改字幕等于篡改讲者原话。
 
-这套 Skill 把整条流水线拆成 **7 个可人工插手的步骤**，每一步的输入输出都是可读文本，LLM 只提建议、永不落笔。
+这套 Skill 把整条流水线拆成 **8 个步骤（其中 7 个必停点）**，每一步的输入输出都是可读文本，LLM 只提建议、永不落笔。
 
 ## 核心特性
 
 - **3 种 ASR 方案**：剪映 ASR（免费+字级时间戳）/ Whisper.cpp + 领域 Prompt（本地+自带标点）/ 火山方舟豆包语音（商业+热词注入），按场景选
 - **3 种电影级字幕断句**：整句模式 / 半句模式 / 碎句模式，匹配不同平台节奏
 - **领域化词表与 Prompt**：儒学/医学/法律/编程……每个领域一套，自带儒学完整示例
-- **沉淀积累闭环**：每次人工校对确认的新术语自动回写词表，**越用越准**
-- **引导式交互**：Agent 在 7 个关键决策点必须停下来问用户，不自作主张
+- **沉淀积累闭环**：每次人工校对确认的新术语回写词表，**越用越准**
+- **引导式交互**：Agent 在 7 个必停节点必须停下来问用户，不自作主张
+- **开箱自检**：`./selftest.sh` 用内置样例跑通全链路，13 项断言，不需要视频和 API Key
 - **纯文本中间产物**：SRT/TSV/词表全是可读文本，随时人工插手
 
-## 30 秒快速开始
+## 5 分钟快速开始
+
+### 1. 克隆并自检（不需要视频、不需要联网、不需要 API Key）
 
 ```bash
-# 1. 克隆本仓库
 git clone https://github.com/1502074527-svg/video-slicing-skill.git
 cd video-slicing-skill
-
-# 2. 让你的 Agent 加载 SKILL.md（Claude Code / Trae / Codex 均可）
-#    直接把 SKILL.md 路径告诉 Agent，或放进 ~/.claude/skills/ 等约定位置
-
-# 3. 对 Agent 说：「帮我把这段讲座切成短视频」
-#    Agent 会按 SKILL.md 指引，在关键节点逐个向你确认方案
+./selftest.sh
 ```
 
-**前置依赖**（按需安装，见 [references/asr-engines.md](references/asr-engines.md)）：
+看到「13 通过 / 0 失败」说明脚本链路可用。自检用的是内置样例
+（`examples/confucian-course/sample/`），会顺便验证「哈佛不被误删」
+「词表默认不被改写」这两条守卫。
 
-| 依赖 | 用途 | 必需 |
-|---|---|---|
-| Python 3.9+ | 全部脚本 | ✅ |
-| ffmpeg / ffprobe | 切片、探时长 | ✅ |
-| VideoCaptioner | 方案 A：剪映 ASR 转写主力 | 推荐 |
-| whisper.cpp | 方案 B：本地 Whisper 对照 | 可选 |
-| 火山方舟账号 | 方案 C：商业 ASR + 热词 | 可选 |
+### 2. 装基础依赖
+
+```bash
+# macOS
+brew install ffmpeg
+
+# Ubuntu / Debian
+sudo apt install ffmpeg
+
+# Windows（PowerShell）
+winget install Gyan.FFmpeg
+```
+
+Python 需 ≥ 3.9。**6 个脚本只用标准库，无需 pip install、无需 requirements.txt。**
+
+方案 A（剪映 ASR）还需装 VideoCaptioner，方案 B 需 whisper.cpp，方案 C 只需火山方舟账号——
+安装步骤见 [references/asr-engines.md](references/asr-engines.md)。
+
+### 3. 让 Agent 加载 SKILL.md
+
+```bash
+# Claude Code
+mkdir -p ~/.claude/skills && ln -s "$PWD" ~/.claude/skills/video-slicing-skill
+
+# Trae / Codex 等其他 Agent：直接把本仓库 SKILL.md 的绝对路径告诉它即可
+```
+
+### 4. 对 Agent 说
+
+> 「帮我把这段讲座切成短视频」
+
+Agent 会按 SKILL.md 指引，在 7 个必停节点逐个向你确认方案。
 
 ## 工作原理
 
@@ -84,6 +108,7 @@ cd video-slicing-skill
 | 你想做什么 | 去哪看 |
 |---|---|
 | Agent 加载入口 | [SKILL.md](SKILL.md) |
+| 跑自检 / 看样例数据 | [selftest.sh](selftest.sh)、[examples/confucian-course/sample/](examples/confucian-course/sample/) |
 | 场景边界与适配规范 | [references/scope-and-adaptation.md](references/scope-and-adaptation.md) |
 | 端到端操作手册 | [references/sop.md](references/sop.md) |
 | 选 ASR 方案 | [references/asr-engines.md](references/asr-engines.md) |

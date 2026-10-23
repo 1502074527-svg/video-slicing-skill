@@ -31,11 +31,11 @@
 每次人工审查确认的新术语对，用 `scripts/consolidate_lexicon.py` 回写到词表：
 
 ```bash
-# 看建议（dry-run）
-python3 ../../scripts/consolidate_lexicon.py 校对建议.tsv <你的领域>.txt --dry-run
-
-# 确认后真写
+# 默认只读：看建议新增哪些（不写文件）
 python3 ../../scripts/consolidate_lexicon.py 校对建议.tsv <你的领域>.txt
+
+# 逐条确认后真写
+python3 ../../scripts/consolidate_lexicon.py 校对建议.tsv <你的领域>.txt --write
 ```
 
 **越用越准**：第 1 轮词表 20 条，第 3 轮 60 条，第 5 轮后 ASR 几乎不出术语错。

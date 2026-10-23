@@ -7,13 +7,18 @@
     防止把《四书》原文当口水词误删。
  3. 本脚本**不做**"删讲错重讲"的语义判断 —— 那需要听音频，交给人工。
 
-用法: python3 clean_oral.py <输入.srt> <输出.srt> [--filler "嗯呃啊哦噢诶哎唉嘿哈吼"]
+用法: python3 clean_oral.py <输入.srt> <输出.srt> [--filler "嗯呃啊哦噢诶哎唉"]
+
+注意：哈/嘿/吼 默认**不删**——它们多是笑声而非口水词，盲删会把「哈佛」「哈耶克」
+「吼叫」削掉一半。确需清理请显式传 --filler 覆盖默认表。
 """
 import re
 import sys
 from pathlib import Path
 
-DEFAULT_FILLER = '嗯呃啊哦噢诶哎唉嘿哈吼'
+# 只收真正的口水音。绝不把「这个/就是/好」放进列表——它们是正常用词，
+# 曾因误删导致「很好」变「很」、语义被改。
+DEFAULT_FILLER = '嗯呃啊哦噢诶哎唉'
 
 # 经典原文守卫：这些字符串里出现的"filler 字符"不许删
 # （例如「肫肫其仁」里的叠字不是口水词）
@@ -23,13 +28,23 @@ DEFAULT_GUARD = [
 ]
 
 
+def get_arg(key, default):
+    """取参数值；参数存在但后面没跟值时给出明确报错，而不是 IndexError。"""
+    if key not in sys.argv:
+        return default
+    i = sys.argv.index(key) + 1
+    if i >= len(sys.argv):
+        print(f"✗ 参数 {key} 后面缺少取值")
+        sys.exit(2)
+    return sys.argv[i]
+
+
 def main():
     if len(sys.argv) < 3:
         print(__doc__)
         sys.exit(1)
     inp, outp = Path(sys.argv[1]), Path(sys.argv[2])
-    filler = (sys.argv[sys.argv.index('--filler') + 1]
-              if '--filler' in sys.argv else DEFAULT_FILLER)
+    filler = get_arg('--filler', DEFAULT_FILLER)
 
     raw = inp.read_text(encoding='utf-8')
 
@@ -52,7 +67,7 @@ def main():
         # 清理因删字产生的粘连标点
         ln = re.sub(r'[，、]{2,}', '，', ln)
         ln = re.sub(r'[，、]\s*。', '。', ln)
-        removed += sum(1 for ch in before if ch in filler) - sum(1 for ch in ln if ch in filler)
+        removed += sum(1 for ch in before if ch in filler)
         lines.append(ln)
     raw = '\n'.join(lines)
 

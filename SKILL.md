@@ -27,7 +27,7 @@ description: 把 1.5–2 小时的课程/讲座/会议录播切成可直接发�
 
 ---
 
-## 工作流总览（7 步，★ = 必停问用户）
+## 工作流总览（8 步，其中 7 个必停点，★ = 必停问用户）
 
 ```
 ① 任务摸底 ★        → 问用户：视频时长/领域/有无现成词表
@@ -123,8 +123,8 @@ python3 scripts/proofread_llm.py apply 句级-清理.srt 校对建议.tsv 句级
 校对完成后，问用户哪些新发现的术语对要写进词表：
 
 ```bash
-python3 scripts/consolidate_lexicon.py 校对建议.tsv 术语替换表.txt --dry-run
-# 输出建议新增的术语对清单 → 让用户勾选 → 确认后去掉 --dry-run 真写
+python3 scripts/consolidate_lexicon.py 校对建议.tsv 术语替换表.txt
+# 输出建议新增的术语对清单 → 让用户逐条勾选 → 确认后加 --write 才真写
 ```
 
 这一步是**越用越准**的关键。详细说明：[references/domain-customization.md#沉淀机制](references/domain-customization.md)
@@ -140,7 +140,7 @@ python3 scripts/consolidate_lexicon.py 校对建议.tsv 术语替换表.txt --dr
 | `fragment` 碎句 | 所有标点 + 长句强断 | 紧凑 | 抖音/快手/Shorts |
 
 详细对比：[references/subtitle-segmentation.md](references/subtitle-segmentation.md)
-**话术模板**：[references/elicitation.md#7-选断句模式](references/elicitation.md)
+**话术模板**：[references/elicitation.md#6-选断句模式](references/elicitation.md)
 
 ### ⑧ 生成字幕 + 切片
 
