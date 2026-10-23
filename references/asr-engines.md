@@ -1,6 +1,7 @@
 # ASR 三方案详细对比
 
-> 同一段 297 秒音频、20 句人工精校真值的实测对比。
+> CER 为作者本机一次实测（297 秒音频、20 句人工精校真值），**样本有限且未随库发布**，
+> 只用于横向比较量级，不要当行业基准引用。
 > 结论先行：**字级时间戳是切片场景的硬约束**，主推方案 A。
 
 ## 对比表
@@ -11,10 +12,14 @@
 | **字级时间戳** | ✅ 有 | ❌ 无 | ✅ 有 |
 | **自带标点** | ❌ 无 | ✅ 有 | ✅ 有 |
 | **热词注入** | ❌ 无 | ⚠️ 通过 Prompt 有限支持 | ✅ 强 |
-| **成本** | 免费 | 免费（本地） | 约 1-5 元/小时 |
-| **隐私** | 本地（调剪映引擎） | 完全本地 | 云端 |
+| **成本** | 免费（云端服务） | 免费（本地算力） | 约 1-5 元/小时 |
+| **隐私** | ⚠️ **音频会上传剪映云端** | ✅ 完全本地 | ⚠️ 音频会上传火山云端 |
+| **稳定性** | ⚠️ 走非官方逆向接口，可能随时失效 | ✅ 本地程序，不受上游影响 | ✅ 官方 API |
 | **安装难度** | 中（需 VideoCaptioner） | 中（需编译 whisper.cpp + 下模型） | 低（只需 API Key） |
 | **适用场景** | 课程切片主力 | 抓漏字对照 | 商业项目、热词强需求 |
+
+> **隐私与合规**：只有方案 B 全程离线。方案 A/C 都会把课程音频上传到第三方，
+> 涉密、未公开课程、有版权限制的素材请先确认授权，或改用方案 B。
 
 ## 方案 A：剪映 ASR（主推）
 
@@ -25,16 +30,18 @@
 
 ```bash
 # VideoCaptioner 是调剪映 ASR 引擎的命令行封装
-git clone https://github.com/WEIFENG2333/VideoCaptioner ~/VideoCaptioner
-cd ~/VideoCaptioner && uv sync
+export VC_HOME="${VC_HOME:-$HOME/VideoCaptioner}"   # 装在别处就改这个变量
+git clone https://github.com/WEIFENG2333/VideoCaptioner "$VC_HOME"
+cd "$VC_HOME" && uv sync
 ```
 
 前置：装 [uv](https://github.com/astral-sh/uv)（Python 包管理器）。
+VideoCaptioner 需要 **Python 3.10–3.12**（比本仓库脚本的 3.9 要求更高）；uv 会自动准备合适的解释器。
 
 ### 使用
 
 ```bash
-cd ~/VideoCaptioner
+cd "$VC_HOME"
 uv run videocaptioner transcribe "<源视频>.mp4" \
   --asr jianying --language zh --word-timestamps --format srt \
   -o "字级.srt"
@@ -56,7 +63,15 @@ uv run videocaptioner transcribe "<源视频>.mp4" \
 # macOS (Apple Silicon)
 brew install whisper-cpp
 
-# 下载模型（推荐 large-v3，4.6GB）
+# Ubuntu / Debian（编译版）
+sudo apt install build-essential cmake
+git clone https://github.com/ggerganov/whisper.cpp ~/whisper.cpp
+cd ~/whisper.cpp && cmake -B build && cmake --build build -j --config Release
+# 可执行文件在 build/bin/whisper-cli
+
+# Windows：装预编译包或走 WSL，同 Ubuntu 步骤
+
+# 下载模型（推荐 large-v3，约 3GB）
 mkdir -p ~/.cache/whisper
 curl -L -o ~/.cache/whisper/ggml-large-v3.bin \
   https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3.bin
@@ -78,7 +93,11 @@ whisper-cli \
 ## 方案 C：火山方舟豆包语音（商业方案）
 
 **核心优势**：热词注入最强、字级时间戳、自带标点、与剪映 ASR 同源（豆包语音大模型）。
-**核心劣势**：按量付费、需火山引擎账号与 API Key。
+**核心劣势**：按量付费、需火山引擎账号与 API Key、音频上传云端。
+
+> ⚠️ **本仓库未提供方案 C 的可运行实现**。下面的代码是**参数示意**（字段名以官方文档为准），
+> 实际接入请按火山引擎「录音文件识别」文档走。本仓库只负责把 C 输出的 SRT 接进后续链路——
+> 只要最终产出标准字级 SRT，第 ④ 步之后的命令完全通用。
 
 ### 准备
 
@@ -86,10 +105,10 @@ whisper-cli \
 2. 创建 API Key + Secret Key
 3. 准备热词表（TXT，一行一词）
 
-### 使用（示例 SDK 调用，详见火山文档）
+### 接入示意（非可执行代码）
 
 ```python
-# 伪代码示意，具体 API 见火山引擎文档
+# 示意：字段名与调用方式以火山官方文档为准，不要直接运行
 from volcengine import speech
 
 client = speech.Client(ak, sk)
@@ -101,6 +120,8 @@ result = client.transcribe(
     enable_punctuation=True      # 自带标点
 )
 ```
+
+拿到结果后转成 SRT（必须含字级时间戳），再回到 [sop.md](sop.md) 第 2 步继续。
 
 ## 选型决策树
 

@@ -25,6 +25,14 @@ description: 把 1.5–2 小时的课程/讲座/会议录播切成可直接发�
 - 不允许适配：时间轴来源、文本决定权、可追溯性、词表回写的人工确认
 - 超出 S1–S3 的需求：明确告知超范围，给替代建议，不硬做
 
+**三场景成熟度不一致，必须如实告知用户**：
+
+| 场景 | v0.1 工具支撑 | 说明 |
+|---|---|---|
+| S1 口播 | ✅ 完整 | merge → proofread → clean_oral 全链路脚本 |
+| S2 字幕 | ✅ 完整 | build_subtitles 三模式 + 21 项自检 |
+| S3 高光剪辑 | ⚠️ 只有原则 | 切点提议/批量切片/核验在 v0.3，当前需人工定切点 + 手写 ffmpeg |
+
 ---
 
 ## 工作流总览（8 步，其中 7 个必停点，★ = 必停问用户）
@@ -60,11 +68,14 @@ description: 把 1.5–2 小时的课程/讲座/会议录播切成可直接发�
 
 3 个方案各有取舍，**不许默认**，必须让用户选：
 
-| 方案 | 字级时间戳 | 自带标点 | 成本 | 适用 |
-|---|---|---|---|---|
-| A. 剪映 ASR | ✅ | ❌ | 免费 | 主推：字级是时间轴金标准 |
-| B. Whisper.cpp + 领域 Prompt | ❌ | ✅ | 免费（本地） | 对照抓漏字 |
-| C. 火山方舟豆包语音 | ✅ | ✅ | 按量付费 | 商业项目、热词需求强 |
+| 方案 | 字级时间戳 | 自带标点 | 成本 | 隐私 | 适用 |
+|---|---|---|---|---|---|
+| A. 剪映 ASR | ✅ | ❌ | 免费 | ⚠️ 音频上传云端 | 主推：字级是时间轴金标准 |
+| B. Whisper.cpp + 领域 Prompt | ❌ | ✅ | 免费（本地） | ✅ 完全离线 | 对照抓漏字 |
+| C. 火山方舟豆包语音 | ✅ | ✅ | 按量付费 | ⚠️ 音频上传云端 | 商业项目、热词需求强 |
+
+⚠️ **只有 B 全程离线**。A 走剪映云端（非官方逆向接口，可能随时失效）；C 走火山官方 API。
+涉密/未公开课程必须先确认能否外传。方案 C 本仓库**只给接入示意、未提供实现**。
 
 详细对比与安装：[references/asr-engines.md](references/asr-engines.md)
 **话术模板**：[references/elicitation.md#2-选-asr-方案](references/elicitation.md)
@@ -82,8 +93,9 @@ description: 把 1.5–2 小时的课程/讲座/会议录播切成可直接发�
 按选定 ASR 方案跑转写，产字级 SRT：
 
 ```bash
-# 方案 A（剪映 ASR）
-cd ~/VideoCaptioner && uv run videocaptioner transcribe "<视频>" \
+# 方案 A（剪映 ASR）；装在别处就把 VC_HOME 改成实际路径
+: "${VC_HOME:=$HOME/VideoCaptioner}"
+cd "$VC_HOME" && uv run videocaptioner transcribe "<视频>" \
   --asr jianying --language zh --word-timestamps --format srt -o "字级.srt"
 
 # 方案 B / C 见 references/asr-engines.md
@@ -149,8 +161,11 @@ python3 scripts/build_subtitles.py 字级.srt 句级-校对.srt 精确字幕.srt
   --mode clause --fps 30
 
 # 切点表（人工定或 AI 提议后人审）
-# → ffmpeg 按切点切片
+# → ffmpeg 按切点切片（交付级用重编码，-c copy 会吸附关键帧，见 sop.md#step-8-切片）
 ```
+
+> ⚠️ **S3 高光剪辑在 v0.1 只有原则、没有工具**：切点提议、批量切片、切点核验都在 v0.3。
+> 现在做 S3 需要你自己定切点、手写 ffmpeg 命令。**必须如实告知用户**，不要暗示 S3 与 S1/S2 同等成熟。
 
 ---
 
@@ -159,7 +174,7 @@ python3 scripts/build_subtitles.py 字级.srt 句级-校对.srt 精确字幕.srt
 - ❌ **不许跳过 elicitation 节点**：话术集里标「必停」的必须停
 - ❌ **不许替用户选 ASR 方案 / 断句模式**：即使用户说「随便」也要列出选项让他确认
 - ❌ **不许自动合入 LLM 校对建议**：必须人工审查 TSV 后再 apply
-- ❌ **不许自动回写词表**：`consolidate_lexicon.py` 默认 `--dry-run`，用户确认后才真写
+- ❌ **不许自动回写词表**：`consolidate_lexicon.py` 默认只读，用户加 `--write` 才真写
 - ❌ **不许用句级 SRT 做切片依据**：时间轴永远回到字级 SRT
 
 ---

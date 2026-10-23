@@ -8,11 +8,12 @@
 ```bash
 # 1. 基础依赖
 which python3 ffmpeg ffprobe
-python3 --version  # ≥ 3.9
+python3 --version  # ≥ 3.9（方案 A 的 VideoCaptioner 需 3.10–3.12）
 
 # 2. 按 ASR 方案选装
-# 方案 A: VideoCaptioner
-ls ~/VideoCaptioner/pyproject.toml
+# 方案 A: VideoCaptioner（默认装在 ~/VideoCaptioner，可用 VC_HOME 指定别处）
+: "${VC_HOME:=$HOME/VideoCaptioner}"
+ls "$VC_HOME/pyproject.toml"
 
 # 方案 B: whisper.cpp
 which whisper-cli
@@ -26,7 +27,8 @@ echo $VOLC_ACCESS_KEY
 ### Step 1 — 转写
 
 ```bash
-cd ~/VideoCaptioner
+: "${VC_HOME:=$HOME/VideoCaptioner}"
+cd "$VC_HOME"
 uv run videocaptioner transcribe "<源视频>.mp4" \
   --asr jianying --language zh --word-timestamps --format srt \
   -o "<工作目录>/字级.srt"
@@ -99,9 +101,19 @@ python3 scripts/build_subtitles.py 字级.srt 句级-校对.srt 精确字幕.srt
 ### Step 8 — 切片
 
 ```bash
-# 按切点表用 ffmpeg 切片
-ffmpeg -ss 00:10:23 -to 00:12:45 -i 源视频.mp4 -c copy 切片01.mp4
+# 快切（-c copy）：秒级完成，但切点会被吸附到最近的关键帧，
+# 关键帧间隔 2s 时可能偏 ±1s，与「切点卡在字幕条间隙」的精度要求不符
+ffmpeg -ss 00:10:23 -to 00:12:45 -i 源视频.mp4 -c copy 切片01-快切.mp4
+
+# 精切（重编码）：切点精确到帧，慢一些但语句不会差几个字
+ffmpeg -ss 00:10:23 -to 00:12:45 -i 源视频.mp4 \
+  -c:v libx264 -crf 18 -preset medium -c:a aac -b:a 192k 切片01.mp4
 ```
+
+**怎么选**：交付级切片用精切；只是自己快速预览用 `-c copy`。
+若源视频关键帧密集（GOP ≤ 1s），`-c copy` 的偏差通常可接受，可先用 `ffprobe` 看 `keyint`。
+
+> v0.1 只给这条命令，批量切片与切点自动校验在 v0.3（见 README Roadmap）。
 
 ---
 

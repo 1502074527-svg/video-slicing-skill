@@ -18,13 +18,17 @@
 
 ## 核心特性
 
-- **3 种 ASR 方案**：剪映 ASR（免费+字级时间戳）/ Whisper.cpp + 领域 Prompt（本地+自带标点）/ 火山方舟豆包语音（商业+热词注入），按场景选
+- **3 种 ASR 方案**：剪映 ASR（免费+字级时间戳，走云端）/ Whisper.cpp + 领域 Prompt（完全离线+自带标点）/ 火山方舟豆包语音（商业+热词注入），按场景选。**只有 Whisper 全程离线**，涉密素材务必先确认
 - **3 种电影级字幕断句**：整句模式 / 半句模式 / 碎句模式，匹配不同平台节奏
 - **领域化词表与 Prompt**：儒学/医学/法律/编程……每个领域一套，自带儒学完整示例
 - **沉淀积累闭环**：每次人工校对确认的新术语回写词表，**越用越准**
 - **引导式交互**：Agent 在 7 个必停节点必须停下来问用户，不自作主张
 - **开箱自检**：`./selftest.sh` 用内置样例跑通全链路，21 项断言，不需要视频和 API Key
 - **纯文本中间产物**：SRT/TSV/词表全是可读文本，随时人工插手
+
+**成熟度说明**：核心卖点是**字幕与口播稿（S1/S2）**，这两个场景工具链完整、有 21 项自检兜底。
+高光剪辑（S3）在 v0.1 只提供原则与 SOP，切点提议、批量切片、切点核验在 Roadmap 的 v0.3——
+当前做 S3 需要你自己定切点并手写 ffmpeg 命令。
 
 ## 5 分钟快速开始
 
@@ -53,10 +57,11 @@ sudo apt install ffmpeg
 winget install Gyan.FFmpeg
 ```
 
-Python 需 ≥ 3.9。**6 个脚本只用标准库，无需 pip install、无需 requirements.txt。**
+Python 需 ≥ 3.9。**7 个脚本只用标准库，无需 pip install、无需 requirements.txt。**
+自检脚本 `selftest.sh` 需要 bash（macOS / Linux 原生可用；Windows 用 Git Bash 或 WSL）。
 
-方案 A（剪映 ASR）还需装 VideoCaptioner，方案 B 需 whisper.cpp，方案 C 只需火山方舟账号——
-安装步骤见 [references/asr-engines.md](references/asr-engines.md)。
+方案 A（剪映 ASR）还需装 VideoCaptioner（它要求 Python 3.10–3.12），方案 B 需 whisper.cpp，
+方案 C 只需火山方舟账号——安装步骤见 [references/asr-engines.md](references/asr-engines.md)。
 
 ### 3. 让 Agent 加载 SKILL.md
 

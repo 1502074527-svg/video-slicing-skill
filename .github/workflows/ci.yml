@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  selftest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: 运行自检（含 21 项断言）
+        run: ./selftest.sh
+
+      - name: 检查文档内部链接（markdown 相对路径）
+        run: |
+          python3 - <<'PY'
+          import re, sys
+          from pathlib import Path
+
+          root = Path('.')
+          bad = []
+          for md in root.rglob('*.md'):
+              for m in re.finditer(r'\]\(([^)#]+)(#[^)]*)?\)', md.read_text(encoding='utf-8')):
+                  target = m.group(1)
+                  if target.startswith(('http://', 'https://', 'mailto:')):
+                      continue
+                  p = (md.parent / target).resolve()
+                  if not p.exists():
+                      bad.append(f"{md}: {target}")
+          if bad:
+              print("断链：")
+              print("\n".join(bad))
+              sys.exit(1)
+          print("链接检查通过")
+          PY

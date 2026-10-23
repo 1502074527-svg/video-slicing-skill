@@ -31,8 +31,9 @@
 ### ④ 转写 + 文字稿
 
 ```bash
-# 转写（VideoCaptioner 调剪映 ASR）
-cd ~/VideoCaptioner
+# 转写（VideoCaptioner 调剪映 ASR）；装在别处就把 VC_HOME 改成实际路径
+: "${VC_HOME:=$HOME/VideoCaptioner}"
+cd "$VC_HOME"
 uv run videocaptioner transcribe "孟子答疑课-20260315.mp4" \
   --asr jianying --language zh --word-timestamps --format srt \
   -o "字级.srt"
@@ -133,9 +134,12 @@ python3 ../../scripts/build_subtitles.py 字级.srt 句级-校对.srt 精确字�
 用 ffmpeg 切片：
 
 ```bash
-ffmpeg -ss 00:03:12 -to 00:05:48 -i 孟子答疑课-20260315.mp4 -c copy 切片01-人禽之辨.mp4
-ffmpeg -ss 00:12:30 -to 00:14:55 -i 孟子答疑课-20260315.mp4 -c copy 切片02-四端.mp4
-ffmpeg -ss 00:34:18 -to 00:37:42 -i 孟子答疑课-20260315.mp4 -c copy 切片03-慎独.mp4
+ffmpeg -ss 00:03:12 -to 00:05:48 -i 孟子答疑课-20260315.mp4 \
+  -c:v libx264 -crf 18 -preset medium -c:a aac -b:a 192k 切片01-人禽之辨.mp4
+ffmpeg -ss 00:12:30 -to 00:14:55 -i 孟子答疑课-20260315.mp4 \
+  -c:v libx264 -crf 18 -preset medium -c:a aac -b:a 192k 切片02-四端.mp4
+ffmpeg -ss 00:34:18 -to 00:37:42 -i 孟子答疑课-20260315.mp4 \
+  -c:v libx264 -crf 18 -preset medium -c:a aac -b:a 192k 切片03-慎独.mp4
 ```
 
 用 `精确字幕.srt` 按切片起止裁出每段对应的字幕条，烧进视频或作为外挂字幕交付。

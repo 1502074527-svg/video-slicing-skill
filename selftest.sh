@@ -15,7 +15,7 @@ bad()  { echo "  ✗ $1"; fail=$((fail + 1)); }
 count() { grep -c -- ' --> ' "$1" 2>/dev/null || true; }
 
 echo "== 1. 脚本语法检查 =="
-if python3 -m py_compile "$ROOT"/scripts/*.py 2>/dev/null; then ok "6 个脚本语法通过"; else bad "语法检查失败"; fi
+if python3 -m py_compile "$ROOT"/scripts/*.py 2>/dev/null; then ok "7 个脚本语法通过"; else bad "语法检查失败"; fi
 
 echo "== 2. 字级 → 句级 =="
 python3 "$ROOT/scripts/merge_srt.py" "$SAMPLE/字级-样例.srt" "$TMP/句级.srt" >/dev/null
