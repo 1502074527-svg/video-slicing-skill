@@ -14,7 +14,13 @@
 
 用法:
   python3 build_subtitles.py <字级.srt> <校对稿.srt> <输出.srt> \\
-      [--mode sentence|clause|fragment] [--max-chars 30] [--max-secs 6.5] [--fps 30] [--force]
+      [--mode sentence|clause|fragment] [--max-chars 30] [--max-secs 6.5] \\
+      [--fps 30] [--punct-mode course|film] [--force]
+
+  python3 build_subtitles.py check <字幕.srt> [--max-chars 20] [--max-cps 9]
+
+check 是产出体检：单行铁律、阅读字数、纯标点卡、连接词悬空、读速上限。
+✗ 为强制项（exit 1），△ 为质量建议项（不影响退出码）。
 """
 import re
 import sys
@@ -27,6 +33,71 @@ STRONG_PUNCT = '。！？!?'
 WEAK_PUNCT = '，、；：,;:'
 ALL_PUNCT = STRONG_PUNCT + WEAK_PUNCT
 SENT_TAIL = re.compile(r'[。！？!?…]+$')
+
+# 阅读字数：标点与空白不计入（判超长、算读速都用这个口径）
+PUNCT_CHARS = '。，、；：？！…—·「」『』（）《》〈〉【】“”‘’,.!?;:()"\''
+PUNCT_RE = re.compile(r'[%s\s]' % re.escape(PUNCT_CHARS))
+
+# 连接词：出现在一幕结尾即为「悬空」。含口语高频词（课程实录里挂得最多的就是这些）
+CONNECTORS = ('也就是说', '换句话说', '总而言之', '总之', '但是', '然而', '所以', '因此',
+              '而且', '并且', '或者', '还是', '不过', '可是', '再说', '另外', '同时',
+              '其实', '毕竟', '那么', '然后', '就是', '这个', '那个', '的话', '因为',
+              '如果', '比方', '等于', '好像')
+
+
+def read_len(text):
+    """阅读字数：只数实字，标点空白不算。"""
+    return len(PUNCT_RE.sub('', text))
+
+
+def dangling(text):
+    """幕尾是否挂着连接词；句末标点收尾的不算悬空。返回该连接词或 None。"""
+    if SENT_TAIL.search(text):
+        return None
+    t = PUNCT_RE.sub('', text)
+    for w in sorted(CONNECTORS, key=len, reverse=True):
+        if t.endswith(w):
+            return w
+    return None
+
+
+def render_punct(text, mode):
+    """course 保留全部标点；film 删句号、逗号类换空格，只留问号感叹号与书名引号。"""
+    if mode != 'film':
+        return text
+    t = re.sub(r'[。.]', '', text)
+    t = re.sub(r'[，、；：,;:]', ' ', t)
+    return re.sub(r'\s+', ' ', t).strip()
+
+
+def check_rows(rows, max_chars, max_cps, label=''):
+    """产出体检：rows = [(start, end, [行...])]。✗ 强制项 exit 1，△ 质量建议项只提示。"""
+    hard = soft = 0
+    print(f"== 字幕体检 {label}（{len(rows)} 条；上限 {max_chars} 字 / {max_cps} 字每秒） ==")
+    for i, (s, e, lines) in enumerate(rows, 1):
+        text = '\n'.join(lines).strip()
+        rl = read_len(text)
+        issues = []
+        if len([x for x in lines if x.strip()]) > 1:
+            issues.append(('✗', '两行及以上（单行铁律）'))
+        if rl == 0:
+            issues.append(('✗', '纯标点卡'))
+        elif rl > max_chars:
+            issues.append(('✗', f'超长 {rl} > {max_chars} 字'))
+        d = dangling(text)
+        if d:
+            issues.append(('△', f'连接词悬空「{d}」'))
+        cps = rl / max(e - s, 1e-9)
+        if cps > max_cps:
+            issues.append(('✗', f'读速 {cps:.1f} > {max_cps} 字/秒'))
+        for lvl, msg in issues:
+            if lvl == '✗':
+                hard += 1
+            else:
+                soft += 1
+            print(f"{lvl} 第{i}条 [{s:7.2f}-{e:7.2f}s] {msg}：{text[:24]}")
+    print(f"强制违规 {hard} 处，质量建议 {soft} 处")
+    return 1 if hard else 0
 
 # 模式 -> (断句标点集合, 强断阈值字数（None = 不按字数强断）, 推荐最大时长)
 MODES = {
@@ -106,7 +177,7 @@ def cut_into_cues(chars, puncts, strong_max_chars, max_chars, max_secs,
     refined = []
     for blk in blocks:
         while (strong_max_chars is not None and len(blk) > 1
-               and (len(''.join(c[0] for c in blk)) > strong_max_chars
+               and (read_len(''.join(c[0] for c in blk)) > strong_max_chars
                     or blk[-1][2] - blk[0][1] > max_secs)):
             cut = _preferred_cut(blk, strong_max_chars)
             cut = max(1, min(cut, len(blk) - 1))
@@ -115,6 +186,38 @@ def cut_into_cues(chars, puncts, strong_max_chars, max_chars, max_secs,
         if blk:
             refined.append(blk)
 
+    # 2.5) 连接词悬空：把切点前移到连接词之前（改时间轴切点，不搬文字——文字永不早于声音）
+    protected = []
+    for i, blk in enumerate(refined):
+        text = ''.join(c[0] for c in blk)
+        w = dangling(text)
+        if w and i + 1 < len(refined):
+            cut = len(blk) - len(w)
+            head = ''.join(c[0] for c in blk[:cut])
+            gap = refined[i + 1][0][1] - blk[-1][2]
+            if cut > 0 and read_len(head) >= min_chars and gap < silence_gap:
+                protected.append(blk[:cut])
+                protected.append(blk[cut:])
+                continue
+        protected.append(blk)
+    refined = protected
+
+    # 2.6) 只剩连接词的短块（如「因此，」）：并到**下一块开头**，而不是并回上一块
+    #      ——连接词本来属于下一句，往前后并都会造成悬空
+    joined = []
+    i = 0
+    while i < len(refined):
+        blk = refined[i]
+        text = ''.join(c[0] for c in blk)
+        if (i + 1 < len(refined) and read_len(text) <= 3 and dangling(text)
+                and refined[i + 1][0][1] - blk[-1][2] < silence_gap):
+            joined.append(blk + refined[i + 1])
+            i += 2
+            continue
+        joined.append(blk)
+        i += 1
+    refined = joined
+
     # 3) 过短碎块回并邻块（不跨静音，也不跨句末标点——否则整句模式会被并回长条）
     out = []
     for blk in refined:
@@ -122,11 +225,11 @@ def cut_into_cues(chars, puncts, strong_max_chars, max_chars, max_secs,
         dur = blk[-1][2] - blk[0][1]
         gap = blk[0][1] - out[-1][-1][2] if out else 0.0
         prev_t = ''.join(c[0] for c in out[-1]) if out else ''
-        if (out and (len(t) < min_chars or dur < min_secs) and gap < silence_gap
-                and not SENT_TAIL.search(prev_t)):
+        if (out and (read_len(t) < min_chars or dur < min_secs) and gap < silence_gap
+                and not SENT_TAIL.search(prev_t) and not dangling(prev_t)):
             merged_t = prev_t + t
             merged_d = blk[-1][2] - out[-1][0][1]
-            if len(merged_t) <= max_chars and merged_d <= max_secs:
+            if read_len(merged_t) <= max_chars and merged_d <= max_secs:
                 out[-1] = out[-1] + blk
                 continue
         out.append(blk)
@@ -155,6 +258,26 @@ def fmt(t, fps):
 
 
 def main():
+    if len(sys.argv) >= 2 and sys.argv[1] == 'check':
+        if len(sys.argv) < 3:
+            print(__doc__)
+            return 1
+        args = sys.argv[3:]
+        get = lambda k, d=None: (args[args.index(k) + 1] if k in args else d)
+        max_chars = int(get('--max-chars', 20))
+        max_cps = float(get('--max-cps', 9))
+        raw = Path(sys.argv[2]).read_text(encoding='utf-8')
+        rows = []
+        for b in re.split(r'\n\s*\n', raw.strip()):
+            L = b.strip().split('\n')
+            if len(L) < 3:
+                continue
+            m = re.match(r'([\d:,.]+) --> ([\d:,.]+)', L[1])
+            if not m:
+                continue
+            rows.append((to_sec(m.group(1)), to_sec(m.group(2)), L[2:]))
+        return check_rows(rows, max_chars, max_cps, Path(sys.argv[2]).name)
+
     if len(sys.argv) < 4:
         print(__doc__)
         sys.exit(1)
@@ -166,6 +289,11 @@ def main():
     if mode not in MODES:
         print(f"✗ --mode 必须是 {list(MODES)} 之一，收到 {mode!r}")
         sys.exit(2)
+    punct_mode = get('--punct-mode', 'course')
+    if punct_mode not in ('course', 'film'):
+        print(f"✗ --punct-mode 必须是 course 或 film，收到 {punct_mode!r}")
+        sys.exit(2)
+    max_cps = float(get('--max-cps', 9))
     puncts, strong_max_chars, default_max_secs = MODES[mode]
     max_chars = int(get('--max-chars', 30))
     max_secs = float(get('--max-secs', default_max_secs))
@@ -186,7 +314,7 @@ def main():
     cues = []
     for chunk in cut_into_cues(aligned, puncts, strong_max_chars, max_chars, max_secs):
         cues.append({'start': chunk[0][1], 'end': chunk[-1][2],
-                     'text': ''.join(c[0] for c in chunk)})
+                     'text': render_punct(''.join(c[0] for c in chunk), punct_mode)})
 
     # 收尾：清重叠、保底时长
     cues = [c for c in cues if any('一' <= ch <= '鿿' for ch in c['text'])]
@@ -204,20 +332,22 @@ def main():
         for i, c in enumerate(cues, 1)), encoding='utf-8')
 
     durs = [c['end'] - c['start'] for c in cues]
-    lens = [len(c['text']) for c in cues]
+    lens = [read_len(c['text']) for c in cues]
     if durs:
         med = sorted(durs)[len(durs) // 2]
         if med < 0.8 and mode != 'fragment':
             print(f"⚠️  字幕时长中位仅 {med:.1f}s —— 请确认第一份 srt 是字级稿，不是句级稿。")
         if mode == 'sentence':
-            overs = [c for c in cues if len(c['text']) > max_chars]
+            overs = [c for c in cues if read_len(c['text']) > max_chars]
             if overs:
                 print(f"⚠️  {len(overs)} 条字幕超过 {max_chars} 字（最长 "
-                      f"{max(len(c['text']) for c in cues)} 字）。sentence 模式只在句末断句；"
+                      f"{max(read_len(c['text']) for c in cues)} 字）。sentence 模式只在句末断句；"
                       f"若源稿缺标点，请先补标点，或改用 --mode clause。")
         print(f"输出 {out}: {len(cues)} 条；模式={mode}；"
               f"时长 中位={med:.1f}s；字数 中位={sorted(lens)[len(lens)//2]}")
+    return check_rows([(c['start'], c['end'], [c['text']]) for c in cues],
+                      max_chars, max_cps, Path(out).name)
 
 
 if __name__ == '__main__':
-    main()
+    sys.exit(main())

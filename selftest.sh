@@ -134,6 +134,25 @@ else
   echo "  · 跳过（未装 ffmpeg）：仅影响 S3 切片，文本链不受影响"
 fi
 
+echo "== 15. 字幕产出体检与标点渲染 =="
+if python3 "$ROOT/scripts/build_subtitles.py" check "$TMP/clause.srt" >/dev/null 2>&1; then
+  ok "check 对合规字幕返回 0"
+else bad "check 对合规字幕误报"; fi
+printf '1\n00:00:00,000 --> 00:00:00,500\n这是两行\n字幕\n' > "$TMP/bad.srt"
+if python3 "$ROOT/scripts/build_subtitles.py" check "$TMP/bad.srt" >/dev/null 2>&1; then
+  bad "check 未拦住两行 + 读速违规"
+else ok "check 拦住两行/读速违规（exit 1）"; fi
+python3 "$ROOT/scripts/build_subtitles.py" "$SAMPLE/字级-样例.srt" "$TMP/句级-清理.srt" \
+  "$TMP/film.srt" --mode clause --punct-mode film >/dev/null
+if ! grep -q '。' "$TMP/film.srt"; then ok "film 模式删句号"; else bad "film 模式仍保留句号"; fi
+if python3 -c "
+import sys; sys.path.insert(0, '$ROOT/scripts')
+from build_subtitles import dangling, read_len
+sys.exit(0 if (dangling('讲的这个') == '这个' and dangling('讲完了。') is None
+               and read_len('儒家，讲义。') == 4) else 1)"; then
+  ok "连接词悬空判定与阅读字数口径正确"
+else bad "连接词悬空或阅读字数口径有误"; fi
+
 echo
 echo "结果：$pass 通过 / $fail 失败"
 [ "$fail" -eq 0 ] || exit 1

@@ -191,5 +191,5 @@ python3 ../../scripts/generate_drafts.py 切点表.md 孟子答疑课-20260315.m
 | `校对建议-可合入.tsv` / `校对建议-对不上.tsv` | 验证 apply 的双键校验（后者故意改坏原句） |
 
 ```bash
-cd ../.. && ./selftest.sh    # 30 项断言，全过说明链路可用
+cd ../.. && ./selftest.sh    # 34 项断言，全过说明链路可用
 ```

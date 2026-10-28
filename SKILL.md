@@ -158,7 +158,10 @@ python3 scripts/consolidate_lexicon.py 校对建议.tsv 术语替换表.txt
 
 ```bash
 python3 scripts/build_subtitles.py 字级.srt 句级-校对.srt 精确字幕.srt \
-  --mode clause --fps 30
+  --mode clause --fps 30 [--punct-mode course|film]
+
+# 产出体检：✗ 强制项（两行/超长/纯标点/读速>9）命中即 exit 1
+python3 scripts/build_subtitles.py check 精确字幕.srt --max-chars 20 --max-cps 9
 
 # S3 高光剪辑（S2 完成后才可开工）
 python3 scripts/propose_cuts.py 精确字幕.srt 切点表.md --min-secs 30 --max-secs 300
