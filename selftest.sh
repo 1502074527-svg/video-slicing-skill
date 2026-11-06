@@ -34,8 +34,8 @@ python3 "$ROOT/scripts/clean_oral.py" "$TMP/句级-术语.srt" "$TMP/句级-清�
 if grep -q '哈佛' "$TMP/句级-清理.srt"; then ok "「哈佛」未被误删（回归守卫）"; else bad "「哈佛」被误删——哈字盲删回归"; fi
 if ! grep -qE '[嗯呃]' "$TMP/句级-清理.srt"; then ok "口水词已清理"; else bad "口水词残留"; fi
 
-echo "== 5. 三种断句模式 =="
-for mode in sentence clause fragment; do
+echo "== 5. 四种断句模式 =="
+for mode in sentence semantic clause fragment; do
   python3 "$ROOT/scripts/build_subtitles.py" "$SAMPLE/字级-样例.srt" "$TMP/句级-清理.srt" \
     "$TMP/$mode.srt" --mode "$mode" >/dev/null
   if [ "$(count "$TMP/$mode.srt")" -ge 3 ]; then ok "$mode 模式产出 $(count "$TMP/$mode.srt") 条"; else bad "$mode 模式产出异常"; fi
@@ -60,6 +60,9 @@ if [ "$(count "$TMP/长句-sentence.srt")" -eq 1 ]; then ok "30 字长句仍为 
 python3 "$ROOT/scripts/build_subtitles.py" "$SAMPLE/字级-长句.srt" "$SAMPLE/句级-长句.srt" \
   "$TMP/长句-clause.srt" --mode clause >/dev/null
 if [ "$(count "$TMP/长句-clause.srt")" -gt 1 ]; then ok "clause 模式同文本正常切成 $(count "$TMP/长句-clause.srt") 条"; else bad "clause 模式未按逗号断句"; fi
+python3 "$ROOT/scripts/build_subtitles.py" "$SAMPLE/字级-长句.srt" "$SAMPLE/句级-长句.srt" \
+  "$TMP/长句-semantic.srt" --mode semantic >/dev/null
+if [ "$(count "$TMP/长句-semantic.srt")" -gt 1 ]; then ok "semantic 模式 30 字长句按 16 字兜底切成 $(count "$TMP/长句-semantic.srt") 条"; else bad "semantic 模式未对超长句兜底"; fi
 
 echo "== 8. 输出覆盖保护 =="
 if python3 "$ROOT/scripts/merge_srt.py" "$SAMPLE/字级-样例.srt" "$TMP/句级.srt" >/dev/null 2>&1; then
@@ -135,7 +138,7 @@ else
 fi
 
 echo "== 15. 字幕产出体检与标点渲染 =="
-if python3 "$ROOT/scripts/build_subtitles.py" check "$TMP/clause.srt" >/dev/null 2>&1; then
+if python3 "$ROOT/scripts/build_subtitles.py" check "$TMP/clause.srt" --max-chars 20 >/dev/null 2>&1; then
   ok "check 对合规字幕返回 0"
 else bad "check 对合规字幕误报"; fi
 printf '1\n00:00:00,000 --> 00:00:00,500\n这是两行\n字幕\n' > "$TMP/bad.srt"
@@ -147,9 +150,10 @@ python3 "$ROOT/scripts/build_subtitles.py" "$SAMPLE/字级-样例.srt" "$TMP/句
 if ! grep -q '。' "$TMP/film.srt"; then ok "film 模式删句号"; else bad "film 模式仍保留句号"; fi
 if python3 -c "
 import sys; sys.path.insert(0, '$ROOT/scripts')
-from build_subtitles import dangling, read_len
+from build_subtitles import dangling, read_len, render_punct
 sys.exit(0 if (dangling('讲的这个') == '这个' and dangling('讲完了。') is None
-               and read_len('儒家，讲义。') == 4) else 1)"; then
+               and read_len('儒家，讲义。') == 4
+               and render_punct('他说「你好」', 'film') == '他说你好') else 1)"; then
   ok "连接词悬空判定与阅读字数口径正确"
 else bad "连接词悬空或阅读字数口径有误"; fi
 

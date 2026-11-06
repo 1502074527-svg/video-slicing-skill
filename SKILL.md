@@ -1,6 +1,6 @@
 ---
 name: video-slicing-skill
-description: 把 1.5–2 小时的课程/讲座/会议录播切成可直接发布的知识点短视频。字级时间戳做时间轴金标准，人工审查做文本兜底，领域词表做术语三层兜底。当用户提出「把这段讲座/课程/会议切成短视频」「给课程录像做字幕」「从长视频里提取知识点」等需求时启用。含 3 种 ASR 方案、3 种电影级字幕断句模式、沉淀积累闭环。
+description: 把 1.5–2 小时的课程/讲座/会议录播切成可直接发布的知识点短视频。字级时间戳做时间轴金标准，人工审查做文本兜底，领域词表做术语三层兜底。当用户提出「把这段讲座/课程/会议切成短视频」「给课程录像做字幕」「从长视频里提取知识点」等需求时启用。含 3 种 ASR 方案、4 种电影级字幕断句模式、沉淀积累闭环。
 ---
 
 # video-slicing-skill
@@ -143,11 +143,12 @@ python3 scripts/consolidate_lexicon.py 校对建议.tsv 术语替换表.txt
 
 ### ⑦ 选断句模式（必停）
 
-让用户从 3 种电影级断句中选 1 种：
+让用户从 4 种电影级断句中选 1 种：
 
 | 模式 | 断句位置 | 节奏 | 适用平台 |
 |---|---|---|---|
 | `sentence` 整句 | 只在 。？！ | 舒缓 | B 站/学术讲座 |
+| `semantic` 语义句 ⭐ | 句界成句，超 16 字才拆软标点 | 完整且可控 | 课程/知识短视频 |
 | `clause` 半句 | 在 ，、；：。？！ | 明快 | 视频号/小红书 |
 | `fragment` 碎句 | 所有标点 + 长句强断 | 紧凑 | 抖音/快手/Shorts |
 
@@ -158,10 +159,10 @@ python3 scripts/consolidate_lexicon.py 校对建议.tsv 术语替换表.txt
 
 ```bash
 python3 scripts/build_subtitles.py 字级.srt 句级-校对.srt 精确字幕.srt \
-  --mode clause --fps 30 [--punct-mode course|film]
+  --mode semantic --fps 30 [--punct-mode course|film]
 
 # 产出体检：✗ 强制项（两行/超长/纯标点/读速>9）命中即 exit 1
-python3 scripts/build_subtitles.py check 精确字幕.srt --max-chars 20 --max-cps 9
+python3 scripts/build_subtitles.py check 精确字幕.srt --max-chars 16 --max-cps 9
 
 # S3 高光剪辑（S2 完成后才可开工）
 python3 scripts/propose_cuts.py 精确字幕.srt 切点表.md --min-secs 30 --max-secs 300

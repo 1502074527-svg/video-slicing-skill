@@ -109,6 +109,9 @@ python3 ../../scripts/consolidate_lexicon.py 校对建议.tsv \
 
 目标平台是视频号 → 选 `clause` 半句模式（节奏明快，适合 2–3 分钟知识短视频）。
 
+> 2026-11-02 口径更新：默认推荐改为 `semantic`（一句话一幕，超 16 字才拆）。
+> 本例保留当时的 `clause` 实际产出作为记录；用 `semantic` 重跑只需换 `--mode`。
+
 ### ⑧ 生成字幕 + 切片
 
 ```bash

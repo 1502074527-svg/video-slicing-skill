@@ -1,23 +1,24 @@
 #!/usr/bin/env python3
-"""用【字级时间戳】生成精确字幕：支持 3 种电影级断句模式，不腰斩语义。
+"""用【字级时间戳】生成精确字幕：支持 4 种电影级断句模式，不腰斩语义。
 
 模式：
   sentence  整句：**只在 。？！ 后断**（不按字数强断，只在真实静音处另起），节奏舒缓，适合 B 站/学术讲座
+  semantic  语义句（默认）：句界 。？！ 优先，整句 ≤16 字不拆，超长才在句内软标点处拆
   clause    半句：在 ，、；：。？！ 后都断，节奏明快，适合视频号/小红书
   fragment  碎句：所有标点后都断 + 长句强断，节奏紧凑，适合抖音/Shorts
 
 原理：
  1. 字级 SRT（每字独立起止时间）与校对后文本做字符级对齐，得到每字真实起止时间。
  2. 按选定模式的标点集合把文本切成块，每块取真实起止时间作为一条字幕。
- 3. 跨静音（>=1.2s）强制断条；过短碎块回并邻块；clause/fragment 另有过长强断。
+ 3. 跨静音（>=1.2s）强制断条；过短碎块回并邻块；semantic/clause/fragment 另有过长强断。
  4. 所有时间戳吸附到帧边界（默认 30fps）。
 
 用法:
   python3 build_subtitles.py <字级.srt> <校对稿.srt> <输出.srt> \\
-      [--mode sentence|clause|fragment] [--max-chars 30] [--max-secs 6.5] \\
+      [--mode sentence|semantic|clause|fragment] [--max-chars N] [--max-secs 6.5] \\
       [--fps 30] [--punct-mode course|film] [--force]
 
-  python3 build_subtitles.py check <字幕.srt> [--max-chars 20] [--max-cps 9]
+  python3 build_subtitles.py check <字幕.srt> [--max-chars 16] [--max-cps 9]
 
 check 是产出体检：单行铁律、阅读字数、纯标点卡、连接词悬空、读速上限。
 ✗ 为强制项（exit 1），△ 为质量建议项（不影响退出码）。
@@ -62,11 +63,12 @@ def dangling(text):
 
 
 def render_punct(text, mode):
-    """course 保留全部标点；film 删句号、逗号类换空格，只留问号感叹号与书名引号。"""
+    """course 保留全部标点；film 删句号、逗号类换空格、删引号，只留问号感叹号与书名号。"""
     if mode != 'film':
         return text
     t = re.sub(r'[。.]', '', text)
     t = re.sub(r'[，、；：,;:]', ' ', t)
+    t = re.sub(r'[「」『』“”‘’]', '', t)
     return re.sub(r'\s+', ' ', t).strip()
 
 
@@ -102,6 +104,7 @@ def check_rows(rows, max_chars, max_cps, label=''):
 # 模式 -> (断句标点集合, 强断阈值字数（None = 不按字数强断）, 推荐最大时长)
 MODES = {
     'sentence': (STRONG_PUNCT, None, 6.5),
+    'semantic': (STRONG_PUNCT, 16, 5.0),
     'clause':   (ALL_PUNCT,    20, 5.0),
     'fragment': (ALL_PUNCT,    10, 3.5),
 }
@@ -264,7 +267,7 @@ def main():
             return 1
         args = sys.argv[3:]
         get = lambda k, d=None: (args[args.index(k) + 1] if k in args else d)
-        max_chars = int(get('--max-chars', 20))
+        max_chars = int(get('--max-chars', 16))
         max_cps = float(get('--max-cps', 9))
         raw = Path(sys.argv[2]).read_text(encoding='utf-8')
         rows = []
@@ -285,7 +288,7 @@ def main():
     guard_output(out, wl)
     args = sys.argv[4:]
     get = lambda k, d=None: (args[args.index(k) + 1] if k in args else d)
-    mode = get('--mode', 'clause')
+    mode = get('--mode', 'semantic')
     if mode not in MODES:
         print(f"✗ --mode 必须是 {list(MODES)} 之一，收到 {mode!r}")
         sys.exit(2)
@@ -295,7 +298,7 @@ def main():
         sys.exit(2)
     max_cps = float(get('--max-cps', 9))
     puncts, strong_max_chars, default_max_secs = MODES[mode]
-    max_chars = int(get('--max-chars', 30))
+    max_chars = int(get('--max-chars', 16 if mode == 'semantic' else 30))
     max_secs = float(get('--max-secs', default_max_secs))
     fps = float(get('--fps', 30))
 

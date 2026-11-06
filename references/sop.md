@@ -93,23 +93,26 @@ python3 scripts/consolidate_lexicon.py 校对建议.tsv 术语替换表.txt --wr
 
 ```bash
 python3 scripts/build_subtitles.py 字级.srt 句级-校对.srt 精确字幕.srt \
-  --mode clause --fps 30
+  --mode semantic --fps 30
 ```
 
-用字级时间戳对齐清理后的文本，按选定断句模式切条。
+用字级时间戳对齐清理后的文本，按选定断句模式切条。`semantic` 为默认：句界 `。？！` 成句，
+整句 ≤16 实字不拆，超长才在句内软标点处拆；禁止跨句拼接。
 
 **产出体检（必跑）**：
 ```bash
-python3 scripts/build_subtitles.py check 精确字幕.srt --max-chars 20 --max-cps 9
+python3 scripts/build_subtitles.py check 精确字幕.srt --max-chars 16 --max-cps 9
 ```
 - ✗ 强制项（两行、阅读字数超限、纯标点卡、读速 >9 字/秒）命中即 exit 1，先修再走
 - △ 连接词悬空是质量建议项：切点能前移就前移，已到句末只提示
 
 **连接词悬空**：一幕结尾不能挂连接词。做法是把**切点前移**到连接词之前，让连接词开下一幕；
 **禁止**把连接词挪到下一幕文本开头——那会让文字比声音早 0.3–0.5 秒，人为制造音画不同步。
+悬空黑名单：但是、然而、所以、因此、而且、并且、或者、还是、不过、可是、再说、另外、
+同时、其实、毕竟、总之、也就是说、换句话说。
 
 **标点渲染**：默认 `course` 全保留；短视频交付加 `--punct-mode film`
-（删句号、逗号换空格，只留问号感叹号与书名引号）。
+（删句号、逗号换空格、**删引号**，只留问号感叹号与书名号）。
 
 ### Step 8 — 切片
 

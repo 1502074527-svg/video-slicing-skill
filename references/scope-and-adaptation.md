@@ -60,7 +60,7 @@
 |---|---|
 | 输入 | 视频 + 已定稿文本 |
 | 取时间轴 | 字级 ASR（唯一金标准） |
-| 出稿链 | `build_subtitles --mode <sentence\|clause\|fragment>` |
+| 出稿链 | `build_subtitles --mode <sentence\|semantic\|clause\|fragment>` |
 | 交付 | SRT（帧边界吸附） |
 | 必停点 | ① 断句模式选择 ② 单条字数/时长上限确认（按平台） |
 | 禁止 | 用句级时间戳做字幕、跨静音并条、按字数等比硬拆 |
@@ -90,7 +90,7 @@
 |---|---|---|
 | 领域 | 儒学 / 医学 / 法律 / 编程 / 通用 | 词表 + 校对 Prompt |
 | ASR 方案 | A 剪映 / B whisper.cpp / C 火山方舟 | 精度、成本、标点 |
-| 断句模式 | sentence / clause / fragment | 字幕节奏 |
+| 断句模式 | sentence / semantic / clause / fragment | 字幕节奏 |
 | 目标平台 | B 站 / 视频号 / 小红书 / 抖音 | 时长上限、单条字数 |
 | 词表来源 | 自带 / 用户提供 / 自动起草 | 术语准确率 |
 
